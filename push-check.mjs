@@ -1,4 +1,5 @@
-/* ทำงานทุก 2 นาที: เช็คชื่อ / ห้องน้ำนานเกินเวลา แล้วส่งแจ้งเตือนไปที่เครื่อง (แม้ปิดแอพ) */
+/* เตือนเช็คชื่อ/ค้างส่งงาน: วันละครั้งต่อห้อง (แม้ตั้งหลายเวลา) · ห้องน้ำเตือนตามเหตุการณ์
+   ทำงานทุก 2 นาที: เช็คชื่อ / ห้องน้ำนานเกินเวลา แล้วส่งแจ้งเตือนไปที่เครื่อง (แม้ปิดแอพ) */
 import { getStore } from '@netlify/blobs';
 import { initPush, send, allSubs, cfgOf, bangkokNow } from '../lib/common.mjs';
 
@@ -22,11 +23,17 @@ export default async () => {
         for (const r of snap.rooms) {
           if (snap.date === n.today && r.done) continue;
           let k = null;
-          if (r.sched && r.sched.length) { const en = r.sched.filter((e) => e.d.indexOf(n.wd) >= 0 && hhmm(e.t) <= n.nowM && n.nowM < 18 * 60); if (en.length) k = 'a|' + r.id + '|' + en[en.length - 1].t + '|' + n.today; }
-          else if (n.wd >= 1 && n.wd <= 5 && n.hour >= (snap.attHour || 8) && n.hour < 17) k = 'a|' + r.id + '|d|' + n.today;
+          if (r.sched && r.sched.length) { const en = r.sched.filter((e) => e.d.indexOf(n.wd) >= 0 && hhmm(e.t) <= n.nowM && n.nowM < 18 * 60); if (en.length) k = 'a|' + r.id + '|' + n.today; }
+          else if (n.wd >= 1 && n.wd <= 5 && n.hour >= (snap.attHour || 8) && n.hour < 17) k = 'a|' + r.id + '|' + n.today;
           if (k && !sent[k]) { sent[k] = 1; due.push(r); changed = true; }
         }
         if (due.length) out.push({ title: '📝 วันนี้ยังไม่เช็คชื่อน้าา (:', body: 'ห้อง ' + due.map((r) => r.name).join(', ') + ' ยังไม่ได้เช็คชื่อ แตะเพื่อไปเช็คชื่อ', tag: 'att', data: { tab: 'attendance', roomId: due[0].id } });
+      }
+      /* ค้างส่งงาน: แจ้งวันละครั้ง (จันทร์–ศุกร์ ตั้งแต่เวลาเตือนเช็คชื่อ) เฉพาะเมื่อวันนี้ยังไม่ได้เปิดแอพ/ยังไม่เคยแจ้ง */
+      if (cfg.mwOn && rec.role !== 'viewer' && rec.mw && rec.mw.n > 0 && snap.mwDone !== n.today && now - (snap.t || 0) < 3 * 86400000
+        && n.wd >= 1 && n.wd <= 5 && n.hour >= (snap.attHour || 8) && n.hour < 17) {
+        const k = 'm|' + n.today;
+        if (!sent[k]) { sent[k] = 1; changed = true; out.push({ title: '📚 วันนี้มีเด็กค้างส่งงานน้าา !(:', body: rec.mw.n + ' คนค้างงาน · ' + rec.mw.text, tag: 'mw', data: { tab: 'check', mode: 'summary' } }); }
       }
       /* ห้องน้ำนานเกินกำหนด (ครูและผู้ดูแลทุกคนที่เปิดการแจ้งเตือนนี้) */
       if (cfg.wcOn && rec.role !== 'viewer') {
@@ -37,7 +44,7 @@ export default async () => {
         }
       }
       if (!changed) continue;
-      for (const k of Object.keys(sent)) { const p = k.split('|'); if ((p[0] === 'a') && p[p.length - 1] !== n.today) delete sent[k]; }
+      for (const k of Object.keys(sent)) { const p = k.split('|'); if ((p[0] === 'a' || p[0] === 'm') && p[p.length - 1] !== n.today) delete sent[k]; }
       for (const msg of out) await send(store, key, rec, msg);
       await store.setJSON(key, { ...rec, sent });
     } catch (e) { console.log('err', String(e)); }

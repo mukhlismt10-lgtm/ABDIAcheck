@@ -16,7 +16,7 @@ export default async (req) => {
   const old = (await store.get(id, { type: 'json' }).catch(() => null)) || {};
   const snap = b.snap || {}, c = b.cfg || {};
   const cfg = {};
-  ['attOn', 'wcOn', 'mwOn', 'slOn', 'slOkOn', 'regOn'].forEach((k) => { if (typeof c[k] === 'boolean') cfg[k] = c[k]; });
+  ['attOn', 'wcOn', 'mwOn', 'slOn', 'slOkOn', 'regOn', 'dmOn'].forEach((k) => { if (typeof c[k] === 'boolean') cfg[k] = c[k]; });
   if (c.wcMin >= 1) cfg.wcMin = Math.min(120, +c.wcMin); if (c.mwN >= 1) cfg.mwN = Math.min(50, +c.mwN);
   const mw = b.mw && b.mw.n > 0 ? { n: +b.mw.n | 0, text: clip(b.mw.text, 200) } : null;
   await store.setJSON(id, { uid: me.uid, role: me.role, sub, cfg, mw, snap: { ...snap, t: Date.now() }, sent: old.sent || {} });
