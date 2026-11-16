@@ -6267,6 +6267,27 @@ function cbSync() {
   }
 }
 setInterval(cbSync, 800);
+// ฟังก์ชันขอสิทธิ์แจ้งเตือน
+async function requestNotificationPermission() {
+    if (!("Notification" in window)) {
+        alert("เบราว์เซอร์ของคุณไม่รองรับการแจ้งเตือนครับ");
+        return;
+    }
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            console.log('อนุญาตแจ้งเตือนแล้ว');
+            alert('เปิดใช้งานการแจ้งเตือนเรียบร้อยแล้วครับ!');
+        } else if (permission === 'denied') {
+            alert('คุณปฏิเสธการรับการแจ้งเตือน สามารถเปิดใหม่ได้ที่การตั้งค่าเบราว์เซอร์');
+        }
+    } catch (error) {
+        console.error('เกิดข้อผิดพลาด:', error);
+    }
+}
+
+init();
+</script>
 
 init();
 </script>
