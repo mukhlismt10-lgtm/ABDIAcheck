@@ -9,10 +9,31 @@
      op 'ice_add' { id, c:[…] }          ส่ง ICE candidate ของฝั่งตัวเอง
      op 'poll' { id, ni }                (ในสาย) สถานะ + answer + ICE ใหม่ของอีกฝั่ง
      op 'end' { id }                     วางสาย */
-import { json, verify, clip, initPush, send, allSubs, after } from '../lib/common.mjs';
+import { json, verify, clip, initPush, send, subsOf, after } from '../lib/common.mjs';
+import { newId } from '../lib/chat.mjs';
 import { checkPtWhy, PT_MSG } from '../lib/parent-data.mjs';
 import { getStore } from '@netlify/blobs';
 import { callStore, callId, CALL_ID, RING_MS } from '../lib/call.mjs';
+
+/* บันทึกประวัติการโทรลงห้องแชทของคู่สนทนา (ครั้งเดียวต่อสาย) · s: done = คุยกันแล้ว (d = วินาที) · dec = ปฏิเสธ · miss = ไม่ได้รับ/ยกเลิก */
+async function logCall(st, id, m, r) {
+  try {
+    if (await st.get('call/' + id + '/l', { type: 'json' }).catch(() => null)) return;
+    const now = Date.now();
+    await st.setJSON('call/' + id + '/l', { at: now });
+    const s = r && r.st === 'ans' ? 'done' : r && r.st === 'dec' ? 'dec' : 'miss';
+    const cl = { k: m.kind === 'v' ? 'v' : 'a', s, d: s === 'done' ? Math.max(0, Math.round((now - ((r && r.at) || now)) / 1000)) : 0 };
+    const a = String(m.from), c = String(m.to), ms = getStore('pmsg');
+    let key, f;
+    if (a[0] !== c[0]) {
+      const pk = a.startsWith('p-') ? a : c, tk = a.startsWith('t-') ? a : c;
+      key = 'th/' + pk.slice(2) + '/' + tk.slice(2); f = a.startsWith('p-') ? 'p' : 't';
+    } else { key = 'dm/' + [a.slice(2), c.slice(2)].sort().join('__'); f = a.slice(2); }
+    const th = await ms.get(key, { type: 'json' }).catch(() => null); if (!th) return;
+    th.msgs = (th.msgs || []).concat([{ id: newId(), f, x: '', at: now, cl }]).slice(-200);
+    await ms.setJSON(key, th);
+  } catch (e) { console.log('call log fail', String(e)); }
+}
 
 const OKID = /^[A-Za-z0-9_-]{6,128}$/;
 
@@ -64,7 +85,7 @@ export default async (req, ctx) => {
     /* ปลุกเครื่องครูที่รับสาย (แจ้งเตือนเด้ง) */
     if (toKey.startsWith('t-')) await after(ctx, (async () => {
       if (!initPush()) return;
-      const ps = getStore('subs'), subs = (await allSubs(ps)).filter((s) => s.rec.uid === toKey.slice(2));
+      const ps = getStore('subs'), subs = await subsOf(toKey.slice(2));
       await Promise.all(subs.map((s) => send(ps, s.key, s.rec, { title: (kind === 'v' ? '📹 ' : '📞 ') + me.name + ' โทรหาคุณ', body: 'แตะเพื่อรับสาย', tag: 'call-' + id, data: { call: id }, urgent: 1 })));
     })());
     return json({ id });
@@ -90,6 +111,7 @@ export default async (req, ctx) => {
     if (side !== 'b') return json({ error: 'forbidden' }, 403);
     await st.setJSON('call/' + id + '/r', { st: 'dec', at: Date.now() });
     await st.delete('call/in/' + me.key).catch(() => {});
+    await logCall(st, id, m, { st: 'dec' });
     return json({ ok: 1 });
   }
   if (b.op === 'ice_add') {
@@ -111,7 +133,9 @@ export default async (req, ctx) => {
     return json(out);
   }
   if (b.op === 'end') {
+    const r0 = await st.get('call/' + id + '/r', { type: 'json' }).catch(() => null);
     await st.setJSON('call/' + id + '/e', { at: Date.now(), by: me.key });
+    await logCall(st, id, m, r0);
     await st.delete('call/in/' + m.to).catch(() => {});
     return json({ ok: 1 });
   }

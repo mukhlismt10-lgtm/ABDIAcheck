@@ -754,6 +754,18 @@ body.kbd .cs-in, body.kbd .cs-ro { padding-bottom: 8px; }
 .cs-lb img { max-width: 100%; max-height: 100%; border-radius: 0; object-fit: contain; -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; cursor: zoom-in; }
 .cs-lb.zoom .lbi { align-items: flex-start; justify-content: flex-start; }
 .cs-lb.zoom img { max-width: none; max-height: none; width: 220%; cursor: zoom-out; }
+/* ===== ปรับห้องแชท: ตัวอักษรขนาดเท่ากัน · พื้นหลังไม่เลื่อนตามข้อความ · ข้อความสถานะออนไลน์ตัวเล็กลง · ประวัติการโทร ===== */
+.cs, .cs * { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.cs-ms .cb { font-size: 15px !important; line-height: 1.45; }
+.cs-ms .cb .cim.gone { font-size: 14px; }
+.cs-ms { background-attachment: scroll !important; }
+.cs-ti span b.pst, .cs-ti span .pst { font-size: 10.5px; font-weight: 500; line-height: 1.2; }
+.cs-ti span .gd { width: 6px; height: 6px; margin-right: 3px; transform: none; }
+.cs-call { align-self: center; display: inline-flex; align-items: center; gap: 7px; max-width: 90%; margin: 8px 0 4px; padding: 6px 14px; border-radius: 99px; background: rgba(255, 255, 255, .88); border: 1px solid rgba(0, 0, 0, .07); font-size: 13px; line-height: 1.3; color: var(--ink2); }
+.cs-call i { font-style: normal; font-size: 15px; }
+.cs-call small { font-size: 11px; opacity: .7; white-space: nowrap; }
+.cs-call.miss { background: #FDECEF; color: #B5384F; border-color: rgba(181, 56, 79, .18); }
+.cs-ms .cim { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 </style>
 <div id="auth" class="auth gut"></div>
 
@@ -3935,6 +3947,7 @@ function vSettings() {
       <div class="btnrow"><button class="btn soft s" onclick="openName('${MEID}')">${ic('edit', 16)} แก้ไขชื่อ</button><button class="btn soft s" onclick="openMyAvatar()">${ic('edit', 16)} เปลี่ยนรูป</button><button class="btn soft s" onclick="fbSignOut()">ออกจากระบบ</button></div></div>`;
   if (!admin) {
     return `<div class="pagehead"><div><h2 class="h2">ตั้งค่า</h2><p class="sm muted">บัญชีและการส่งออกข้อมูล</p></div></div>${account}
+      ${themeCardHTML()}
       ${notifSoundCardHTML()}
       <div class="card"><h3 class="h3">ข้อมูลโรงเรียน (ใช้ร่วมกันทุกคน)</h3>
         <p class="sm muted" style="margin-top:6px">${esc(S.settings.school || 'ยังไม่ได้ตั้งชื่อโรงเรียน')}${S.settings.year ? ' · ปีการศึกษา ' + esc(S.settings.year) : ''}</p>
@@ -4534,7 +4547,7 @@ async function parentBoot() {
   showAuth('<div class="authform"><p class="sm muted">กำลังโหลดข้อมูลการเรียนของลูก…</p></div>');
   try { pLoad(await pApi('data')); $('#auth').hidden = true; pRender(); }
   catch (e) { pErr(e); return; }
-  setInterval(pPoll, 15000); setInterval(pChatPoll, 2000);
+  setInterval(pPoll, 8000); setInterval(pChatPoll, 2000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { pPoll(); pChatPoll(); } });
 }
 function pLoad(d) {
@@ -4724,6 +4737,16 @@ const CS = {
     act: (a) => { const c = PM.cur; return pmApi('act', Object.assign({ no: c.no, tuid: c.tuid }, a)).then((j) => j.msgs || []); }
   }
 };
+/* ประวัติการโทรในห้องแชท: โทรออก/สายเรียกเข้า · คุยกันกี่นาที · ปฏิเสธ · ไม่ได้รับ */
+function csCallHTML(m, mine) {
+  const c = m.cl || {}, v = c.k === 'v', nm = v ? 'วิดีโอคอล' : 'โทรเสียง', icn = v ? '📹' : '📞';
+  let t, cls = '';
+  if (c.s === 'done') t = nm + (mine ? ' (โทรออก)' : ' (สายเรียกเข้า)') + ' · คุยกัน ' + fmtSec(c.d || 0);
+  else if (c.s === 'dec') t = mine ? nm + ' · ปลายสายไม่รับสาย' : nm + ' · คุณปฏิเสธสาย';
+  else if (mine) t = nm + ' · ไม่มีผู้รับสาย';
+  else { t = (v ? 'วิดีโอคอล' : 'สาย') + 'ที่ไม่ได้รับ'; cls = ' miss'; }
+  return '<div class="cs-call' + cls + '"><i>' + icn + '</i><span>' + t + '</span><small>' + hmOf(m.at) + '</small></div>';
+}
 function csBubbles(side) {
   const R = CS[side], msgs = R.msgs();
   if (!msgs) return '<div class="cs-empty">กำลังโหลด…</div>';
@@ -4734,7 +4757,8 @@ function csBubbles(side) {
     const pv = msgs[i - 1], nx = msgs[i + 1], b0 = brk(pv, m);
     if (b0) h += '<div class="cs-sep">' + esc(sepLabel(m.at)) + '</div>';
     if (R.unId && m.id === R.unId) h += '<div class="cs-new" id="' + side + 'new">ข้อความใหม่ ' + R.unN + ' ข้อความ</div>';
-    const jp = !b0 && pv.f === m.f && m.at - pv.at < 180000, jn = nx && !brk(m, nx) && nx.f === m.f && nx.at - m.at < 180000;
+    if (m.cl && !m.del) { h += csCallHTML(m, m.f === R.mineF); return; }
+    const jp = !b0 && !pv.cl && pv.f === m.f && m.at - pv.at < 180000, jn = nx && !nx.cl && !brk(m, nx) && nx.f === m.f && nx.at - m.at < 180000;
     const pos = jp ? (jn ? 'gm' : 'gl') : (jn ? 'gf' : 'gs'), me = m.f === R.mineF;
     const rxs = m.del || !m.rx ? [] : Object.keys(m.rx).map((k) => m.rx[k]), cnt = {};
     rxs.forEach((e) => { cnt[e] = (cnt[e] || 0) + 1; });
@@ -4758,11 +4782,11 @@ function csBubbles(side) {
 /* ----- รูปในแชท: ย่อ/บีบอัดก่อนส่ง · ลบอัตโนมัติเมื่อครบ 24 ชม. · หมดอายุแล้วขึ้นข้อความแทนรูป ----- */
 const CIM_GONE = new Set(), CIM_EXPIRED = 'รูปหมดอายุแล้วน้าา ):';
 function csImgHTML(m) {
-  if (m.img) return '<img class="cim" src="' + m.img + '" alt="รูปที่กำลังส่ง" draggable="false">';
+  if (m.img) return '<img class="cim" src="' + m.img + '" alt="รูปที่กำลังส่ง" draggable="false" onclick="csImgOpen(this)">';
   if (!m.im) return '';
   const left = (m.im.exp || 0) - Date.now();
   if (m.im.gone || left <= 0 || CIM_GONE.has(m.im.id)) return '<div class="cim gone">' + CIM_EXPIRED + '</div>';
-  return '<img class="cim" loading="lazy" draggable="false" alt="รูปภาพ" src="/api/chatimg?id=' + encodeURIComponent(m.im.id) + '" onerror="csImgErr(this)">'
+  return '<img class="cim" loading="lazy" draggable="false" alt="รูปภาพ" src="/api/chatimg?id=' + encodeURIComponent(m.im.id) + '" onerror="csImgErr(this)" onclick="csImgOpen(this)">'
     + '<span class="cexp">' + (left < 3600e3 ? 'หายไปภายใน 1 ชม.' : 'หายใน ' + Math.ceil(left / 3600e3) + ' ชม.') + '</span>';
 }
 function csImgErr(el) {
@@ -4842,6 +4866,7 @@ function lbOpen(list, idx, o) {
   document.addEventListener('keydown', k); document.body.appendChild(el); show(i);
 }
 function csImgOpen(el) {
+  if (Date.now() - (csImgOpen._t || 0) < 500) return; csImgOpen._t = Date.now();
   const src = el.currentSrc || el.src;
   lbOpen([src], 0, { hint: () => { const q = /[?&]id=(\d{13})-/.exec(src), left = q ? +q[1] - Date.now() : 0; return left > 0 ? 'รูปจะหายใน ' + (left < 3600e3 ? 'ไม่ถึง 1 ชม.' : Math.ceil(left / 3600e3) + ' ชม.') + ' · กดบันทึกไว้ได้' : ''; } });
 }
@@ -6116,7 +6141,7 @@ async function pbDel(id) {
   if (!confirm('ลบประกาศนี้ออกจากกระดานไหมคะ?')) return;
   try { PM.posts = (await pmApi('bdel', { id })).posts || []; pmDraw(); toast('ลบประกาศแล้ว'); } catch (e) { toast(e.message); }
 }
-setInterval(pmPoll, 20000);
+setInterval(pmPoll, 12000);
 setInterval(pmChatPoll, 2000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (PT) { pChatPoll(); pPoll(); } else { pmChatPoll(); pmPoll(); } } });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !PT) setTimeout(pmPoll, 800); });

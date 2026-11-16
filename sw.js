@@ -59,11 +59,11 @@ self.addEventListener('push', (e) => {
     let vib = [120, 60, 120]; try { const v = await kvGet('vib'); if (Array.isArray(v)) vib = v; } catch (x) { /* ใช้ค่าเริ่มต้น */ }
     /* จดว่าวันนี้เตือนเรื่องนี้แล้ว เพื่อไม่ให้แอพเตือนซ้ำตอนเปิดใช้ */
     if (d.tag === 'att' || d.tag === 'mw') { try { const nt = (await kvGet('noted')) || {}; nt[d.tag] = ymd(new Date()); await kvSet('noted', nt); } catch (x) { /* ignore */ } }
-    /* ถ้าเปิดแอพอยู่หน้าจอ: ให้แอพเล่นเสียงของแอพเองแทน ไม่เด้งแจ้งเตือนของเครื่อง (ไม่มีเสียงมือถือ) */
+    /* ถ้าเปิดแอพอยู่หน้าจอจริงๆ (มองเห็น + โฟกัส): ให้แอพเล่นเสียงของแอพเองแทน · ถ้าสลับไปแอพอื่นหรือล็อกจอ ให้เด้งแจ้งเตือนของเครื่องทันที */
     try {
       const cl = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       const iosDev = /iPhone|iPad|iPod/.test(self.navigator.userAgent); /* iOS ต้องแสดงแจ้งเตือนทุกครั้ง ไม่งั้นระบบเพิกถอนสิทธิ์รับแจ้งเตือนของแอพ */
-      if (!iosDev && cl.some((c) => c.visibilityState === 'visible')) { cl.forEach((c) => { try { c.postMessage({ abdiaPing: { call: d.data && d.data.call ? d.data.call : null } }); } catch (x) { /* ignore */ } }); return; }
+      if (!iosDev && cl.some((c) => c.visibilityState === 'visible' && c.focused)) { cl.forEach((c) => { try { c.postMessage({ abdiaPing: { call: d.data && d.data.call ? d.data.call : null } }); } catch (x) { /* ignore */ } }); return; }
     } catch (x) { /* แสดงแจ้งเตือนตามปกติ */ }
     let quiet = false; try { quiet = !!(await kvGet('quiet')); } catch (x) { /* ignore */ }
     await self.registration.showNotification(d.title || 'เช็คงาน ABDIA', {

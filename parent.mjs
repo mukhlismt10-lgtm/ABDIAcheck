@@ -10,7 +10,7 @@
      op 'act' { to, act, id, text?, emoji? }  แก้ไข/ยกเลิกส่ง/ลบฝั่งตัวเอง/รีแอคชันข้อความ
      op 'brx' { id, emoji } / 'bcm' { id, text } / 'bcdel' { id, cid }  รีแอคชัน/ความคิดเห็นบนกระดาน */
 import { getStore } from '@netlify/blobs';
-import { json, initPush, send, allSubs, clip, after } from '../lib/common.mjs';
+import { json, initPush, send, allSubs, subsOf, clip, after } from '../lib/common.mjs';
 import { checkPtWhy, PT_MSG, studentData } from '../lib/parent-data.mjs';
 import { viewMsgs, applyAct, newMsg, replyRef, postsView, postView, boardSocial, mediaOf, mediaIn, hasMedia, okCid, sigOf } from '../lib/chat.mjs';
 import { presOf, presBeat } from '../lib/presence.mjs';
@@ -103,14 +103,14 @@ export default async (req, ctx) => {
     if (th.msgs.filter((m) => m.f === 'p' && now - m.at < 3600e3).length >= 30) return json({ error: 'ส่งถี่เกินไป ลองใหม่ภายหลัง' }, 429);
     const md = await mediaIn(b, th, 'p', now); if (md.error) return json({ error: md.error }, md.status || 400);
     th.msgs.push(Object.assign(newMsg('p', x, replyRef(th, b.re), md), { at: now }, cid ? { cid } : {})); th.msgs = th.msgs.slice(-200); th.tn = (th.tn || 0) + 1; th.pn = 0; th.at = now;
-    await ms.setJSON(k, th);
-    /* แจ้งเตือนครูเบื้องหลัง ไม่ให้ผู้ปกครองต้องรอ */
-    const sname = th.sname;
-    await after(ctx, (async () => {
+    /* แจ้งเตือนครูทันที: เริ่มส่งพร้อมกับการบันทึกข้อความ ไม่รอให้บันทึกเสร็จก่อน */
+    const pushP = (async () => {
       if (!initPush()) return;
-      const store = getStore('subs'), subs = (await allSubs(store)).filter((s) => s.rec.uid === to);
+      const store = getStore('subs'), subs = await subsOf(to);
       await Promise.all(subs.map((s) => send(store, s.key, s.rec, { title: '💌 คุณครูมีข้อความจากผู้ปกครองน้าา', body: 'ผปค ' + who.no + ': ' + (x ? clip(x, 120) : b.st ? '🌸 ส่งสติ๊กเกอร์' : b.au ? '🎤 ส่งข้อความเสียง' : '📷 ส่งรูปภาพ'), tag: 'pmsg', data: { pmsg: 1 } })));
-    })());
+    })();
+    await ms.setJSON(k, th);
+    await after(ctx, pushP);
     return json({ msgs: viewMsgs(th, 'p') });
   }
 

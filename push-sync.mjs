@@ -1,7 +1,7 @@
 /* รับที่อยู่เครื่อง (push subscription) + ข้อมูลสรุปจากแอพ (เช็คชื่อ ห้องน้ำ ค้างงาน การตั้งค่า) แล้วเก็บไว้ให้ push-check ใช้ */
 import { getStore } from '@netlify/blobs';
 import { createHash } from 'node:crypto';
-import { json, verify, clip } from '../lib/common.mjs';
+import { json, verify, clip, subIdxAdd } from '../lib/common.mjs';
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
@@ -20,6 +20,7 @@ export default async (req) => {
   if (c.wcMin >= 1) cfg.wcMin = Math.min(120, +c.wcMin); if (c.mwN >= 1) cfg.mwN = Math.min(50, +c.mwN);
   const mw = b.mw && b.mw.n > 0 ? { n: +b.mw.n | 0, text: clip(b.mw.text, 200) } : null;
   await store.setJSON(id, { uid: me.uid, role: me.role, sub, cfg, mw, snap: { ...snap, t: Date.now() }, sent: old.sent || {} });
+  await subIdxAdd(me.uid, id);
   /* ห้องน้ำ: เก็บรายการที่ยังไม่กลับไว้ส่วนกลาง (ครูทุกคนได้รับแจ้งเมื่อเกินเวลา) */
   const t = b.trips;
   if (t && me.role !== 'viewer') {

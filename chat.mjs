@@ -59,6 +59,7 @@ export function viewMsgs(th, party, own = true) {
     if (m.im && !m.del) o.im = m.im.exp > Date.now() ? { id: m.im.id, exp: m.im.exp } : { gone: 1 };
     if (m.st && !m.del) o.st = m.st;
     if (m.au && !m.del) o.au = m.au.exp > Date.now() ? { id: m.au.id, exp: m.au.exp, d: m.au.d || 0 } : { gone: 1 };
+    if (m.cl && !m.del) o.cl = m.cl;
     if (m.re) o.re = m.re;
     if (m.rx && Object.keys(m.rx).length) o.rx = m.rx;
     return o;
@@ -68,7 +69,7 @@ export function viewMsgs(th, party, own = true) {
 export const imgOf = (th, id) => { const m = (th.msgs || []).find((z) => mid(z) === String(id || '')); return m && m.im ? m.im.id : null; };
 export function lastView(th, party, own = true) {
   const v = viewMsgs(th, party, own), l = v[v.length - 1];
-  return l ? { x: l.del ? 'ลบข้อความแล้ว' : (l.x || (l.im ? '📷 รูปภาพ' : l.st ? '🌸 สติ๊กเกอร์' : l.au ? '🎤 ข้อความเสียง' : '')), f: l.f, at: l.at } : null;
+  return l ? { x: l.del ? 'ลบข้อความแล้ว' : (l.x || (l.cl ? (l.cl.k === 'v' ? '📹 วิดีโอคอล' : '📞 โทรเสียง') : l.im ? '📷 รูปภาพ' : l.st ? '🌸 สติ๊กเกอร์' : l.au ? '🎤 ข้อความเสียง' : '')), f: l.f, at: l.at } : null;
 }
 /* แก้ไข / ยกเลิกส่ง / ลบฝั่งตัวเอง / รีแอคชัน — คืนข้อความผิดพลาด หรือ null ถ้าสำเร็จ */
 export function applyAct(th, party, b) {

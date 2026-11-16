@@ -1,5 +1,6 @@
 /* ตัวช่วยร่วมของฟังก์ชันแจ้งเตือน (ไม่ใช่ฟังก์ชันเอง จึงเก็บไว้นอกโฟลเดอร์ functions) */
 import webpush from 'web-push';
+import { getStore } from '@netlify/blobs';
 
 export const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
 const PROJECT = process.env.FIREBASE_PROJECT_ID || 'abdia-check';
@@ -36,6 +37,25 @@ export async function allSubs(store) {
   const { blobs } = await store.list();
   const recs = await Promise.all(blobs.map(async ({ key }) => ({ key, rec: await store.get(key, { type: 'json' }).catch(() => null) })));
   return recs.filter((x) => x.rec && x.rec.sub);
+}
+/* เครื่องรับแจ้งเตือนของผู้ใช้คนเดียว: ใช้ดัชนี (store subidx) ไม่ต้องไล่อ่านทุกเครื่องทุกครั้ง → แจ้งเตือนออกเร็วขึ้นมาก
+   ถ้ายังไม่มีดัชนี (ผู้ใช้เก่า) จะสแกนครั้งเดียวแล้วสร้างให้ */
+export async function subsOf(uid) {
+  const store = getStore('subs'), idx = getStore('subidx');
+  const ids = await idx.get('u/' + uid, { type: 'json' }).catch(() => null);
+  if (Array.isArray(ids)) {
+    const recs = await Promise.all(ids.map(async (key) => ({ key, rec: await store.get(key, { type: 'json' }).catch(() => null) })));
+    return recs.filter((x) => x.rec && x.rec.sub && x.rec.uid === uid);
+  }
+  const all = (await allSubs(store)).filter((s) => s.rec.uid === uid);
+  await idx.setJSON('u/' + uid, all.map((s) => s.key)).catch(() => {});
+  return all;
+}
+export async function subIdxAdd(uid, key) {
+  try {
+    const idx = getStore('subidx'), cur = (await idx.get('u/' + uid, { type: 'json' }).catch(() => null)) || [];
+    if (!cur.includes(key)) { cur.push(key); await idx.setJSON('u/' + uid, cur.slice(-20)); }
+  } catch (e) { /* ข้ามไป */ }
 }
 /* ทำงานเบื้องหลังต่อหลังตอบผู้ใช้แล้ว (ถ้าแพลตฟอร์มรองรับ waitUntil) ไม่งั้นรอให้เสร็จ */
 export async function after(ctx, p) {

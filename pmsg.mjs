@@ -19,7 +19,7 @@
      op 'dm_act' { peer, act, id, text?, emoji? } เช่นเดียวกัน ในห้องแชทระหว่างครู
      op 'brx' { id, emoji } / 'bcm' { id, text } / 'bcdel' { id, cid }  รีแอคชัน/ความคิดเห็นบนกระดาน */
 import { getStore } from '@netlify/blobs';
-import { json, verify, clip, after, initPush, send, allSubs, cfgOf } from '../lib/common.mjs';
+import { json, verify, clip, after, initPush, send, allSubs, subsOf, cfgOf } from '../lib/common.mjs';
 import { pingSig, mintPt, PT_MSG, taughtNos, normNo } from '../lib/parent-data.mjs';
 import { viewMsgs, lastView, applyAct, newMsg, replyRef, postsView, postView, boardSocial, mediaOf, mediaIn, hasMedia, okCid, sigOf, newId } from '../lib/chat.mjs';
 import { presBeat, presOf } from '../lib/presence.mjs';
@@ -139,13 +139,14 @@ export default async (req, ctx) => {
       const md = await mediaIn(b, g, me.uid); if (md.error) return json({ error: md.error }, md.status || 400);
       g.msgs.push(Object.assign(newMsg(me.uid, x, replyRef(g, b.re), md), cid ? { cid } : {})); g.msgs = g.msgs.slice(-300);
       g.un = g.un || {}; g.mem.forEach((u) => { if (u !== me.uid) g.un[u] = (g.un[u] || 0) + 1; }); g.un[me.uid] = 0; g.at = Date.now();
-      await gs.setJSON(gk, g);
-      await after(ctx, (async () => {
+      const pushP = (async () => {
         if (!initPush()) return;
-        const store = getStore('subs'), subs = (await allSubs(store)).filter((s) => s.rec.uid !== me.uid && g.mem.includes(s.rec.uid) && cfgOf(s.rec).dmOn);
+        const store = getStore('subs'), subs = (await Promise.all(g.mem.filter((u) => u !== me.uid).map((u) => subsOf(u)))).flat().filter((s) => cfgOf(s.rec).dmOn);
         const payload = { title: '👥 ' + clip(g.name, 30) + ' · ' + clip(me.name || 'ครู', 30), body: x ? clip(x, 120) : b.st ? '🌸 ส่งสติ๊กเกอร์' : b.au ? '🎤 ส่งข้อความเสียง' : '📷 ส่งรูปภาพ', tag: 'g-' + g.id, data: { grp: g.id } };
         await Promise.all(subs.map((s) => send(store, s.key, s.rec, payload)));
-      })());
+      })();
+      await gs.setJSON(gk, g);
+      await after(ctx, pushP);
       return json({ msgs: viewMsgs(g, me.uid) });
     }
     return json({ error: 'unknown op' }, 400);
@@ -189,14 +190,15 @@ export default async (req, ctx) => {
     const md = await mediaIn(b, th, me.uid); if (md.error) return json({ error: md.error }, md.status || 400);
     th.msgs.push(Object.assign(newMsg(me.uid, x, replyRef(th, b.re), md), cid ? { cid } : {})); th.msgs = th.msgs.slice(-300);
     th.un = th.un || {}; th.un[peer] = (th.un[peer] || 0) + 1; th.un[me.uid] = 0; th.at = Date.now();
-    await ms.setJSON(k, th);
-    /* แจ้งเตือนเข้าเครื่องเพื่อนครูทันที (แม้ปิดแอพ) ถ้าเขาเปิดแจ้งเตือนไว้ */
-    await after(ctx, (async () => {
+    /* แจ้งเตือนเข้าเครื่องเพื่อนครูทันที (แม้ปิดแอพ): ส่งพร้อมกับการบันทึก ไม่รอ */
+    const pushP = (async () => {
       if (!initPush()) return;
-      const store = getStore('subs'), subs = (await allSubs(store)).filter((s) => s.rec.uid === peer && cfgOf(s.rec).dmOn);
+      const store = getStore('subs'), subs = (await subsOf(peer)).filter((s) => cfgOf(s.rec).dmOn);
       const payload = { title: '🌸 ' + clip(me.name || 'เพื่อนครู', 40) + ' ส่งข้อความมาหา', body: x ? clip(x, 120) : b.st ? '🌸 ส่งสติ๊กเกอร์' : b.au ? '🎤 ส่งข้อความเสียง' : '📷 ส่งรูปภาพ', tag: 'dm-' + me.uid, data: { dm: me.uid } };
       await Promise.all(subs.map((s) => send(store, s.key, s.rec, payload)));
-    })());
+    })();
+    await ms.setJSON(k, th);
+    await after(ctx, pushP);
     return json({ msgs: viewMsgs(th, me.uid) });
   }
   /* รายชื่อผู้ปกครองที่เข้ามาแล้ว ให้ครูค้นหาแล้วเริ่มแชทก่อนได้ */
