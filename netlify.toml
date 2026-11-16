@@ -1,0 +1,12 @@
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# อนุญาตให้หน้าเว็บนี้ขอใช้กล้อง/ไมโครโฟนได้ (ไม่ให้เว็บอื่นฝังแล้วใช้)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Permissions-Policy = "camera=(self), microphone=(self)"
